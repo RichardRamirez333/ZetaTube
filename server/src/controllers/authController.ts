@@ -15,6 +15,7 @@ export const signup = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
     const user = await User.create({ username, email, password: hashed });
+    const token = generateToken(String(user._id));
     res.status(201).json({
       _id: user._id,
       username: user.username,
@@ -22,11 +23,12 @@ export const signup = async (req: Request, res: Response) => {
       avatar: user.avatar,
       bio: user.bio,
       subscribers: user.subscribers,
-      subscriptions: [],
-      token: generateToken(String(user._id)),
+      subscriptions: user.subscriptions,
+      token,
     });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    console.error('Signup error:', err);
+    res.status(500).json({ message: err.message || 'Server error during signup' });
   }
 };
 
@@ -38,6 +40,7 @@ export const login = async (req: Request, res: Response) => {
       res.status(401).json({ message: 'Invalid email or password' });
       return;
     }
+    const token = generateToken(String(user._id));
     res.json({
       _id: user._id,
       username: user.username,
@@ -46,10 +49,11 @@ export const login = async (req: Request, res: Response) => {
       bio: user.bio,
       subscribers: user.subscribers,
       subscriptions: user.subscriptions,
-      token: generateToken(String(user._id)),
+      token,
     });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    console.error('Login error:', err);
+    res.status(500).json({ message: err.message || 'Server error during login' });
   }
 };
 
