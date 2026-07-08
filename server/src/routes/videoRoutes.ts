@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
 import { protect } from '../middleware/auth';
 import {
   uploadVideo,
@@ -23,24 +22,15 @@ import {
   clearAllData,
 } from '../controllers/videoController';
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, 'uploads/'),
-  filename: (_req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const videoExt = /mp4|webm|ogg|mkv|avi|mov/;
     const imgExt = /jpg|jpeg|png|gif|webp/;
-    const ext = path.extname(file.originalname).toLowerCase();
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
     if (file.fieldname === 'video' && videoExt.test(ext)) cb(null, true);
     else if (file.fieldname === 'thumbnail' && imgExt.test(ext)) cb(null, true);
-    else if (file.fieldname === 'avatar' && imgExt.test(ext)) cb(null, true);
     else cb(new Error('Invalid file type'));
   },
 });

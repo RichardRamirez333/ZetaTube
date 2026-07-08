@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import User from '../models/User';
 import generateToken from '../utils/generateToken';
 import { AuthRequest } from '../middleware/auth';
+import { uploadToB2 } from '../utils/b2';
 
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -90,7 +91,11 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       user.email = email;
     }
     if (bio !== undefined) user.bio = bio;
-    if (req.file) user.avatar = `/uploads/${req.file.filename}`;
+    if (req.file) {
+      const ext = req.file.originalname.split('.').pop();
+      const name = `avatars/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+      user.avatar = await uploadToB2(req.file.buffer, name, req.file.mimetype);
+    }
 
     if (currentPassword && newPassword) {
       const valid = await bcrypt.compare(currentPassword, user.password);

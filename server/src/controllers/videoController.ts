@@ -6,6 +6,7 @@ import Comment from '../models/Comment';
 import Notification from '../models/Notification';
 import Playlist from '../models/Playlist';
 import { AuthRequest } from '../middleware/auth';
+import { uploadToB2 } from '../utils/b2';
 
 export const uploadVideo = async (req: AuthRequest, res: Response) => {
   try {
@@ -13,8 +14,21 @@ export const uploadVideo = async (req: AuthRequest, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     const videoFile = files?.video?.[0];
     const thumbFile = files?.thumbnail?.[0];
-    const videoUrl = videoFile ? `/uploads/${videoFile.filename}` : '';
-    const thumbnailUrl = thumbFile ? `/uploads/${thumbFile.filename}` : '';
+    
+    let videoUrl = '';
+    let thumbnailUrl = '';
+    
+    if (videoFile) {
+      const ext = videoFile.originalname.split('.').pop();
+      const name = `videos/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+      videoUrl = await uploadToB2(videoFile.buffer, name, videoFile.mimetype);
+    }
+    if (thumbFile) {
+      const ext = thumbFile.originalname.split('.').pop();
+      const name = `thumbnails/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+      thumbnailUrl = await uploadToB2(thumbFile.buffer, name, thumbFile.mimetype);
+    }
+    
     const video = await Video.create({
       userId: req.user!.id,
       title,
@@ -57,7 +71,11 @@ export const updateVideo = async (req: AuthRequest, res: Response) => {
     if (category) video.category = category;
     if (privacy) video.privacy = privacy;
     const thumbFile = (req.files as any)?.thumbnail?.[0];
-    if (thumbFile) video.thumbnailUrl = `/uploads/${thumbFile.filename}`;
+    if (thumbFile) {
+      const ext = thumbFile.originalname.split('.').pop();
+      const name = `thumbnails/${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+      video.thumbnailUrl = await uploadToB2(thumbFile.buffer, name, thumbFile.mimetype);
+    }
     await video.save();
     res.json(video);
   } catch (err: any) {
