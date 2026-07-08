@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes';
 import videoRoutes from './routes/videoRoutes';
@@ -23,7 +24,6 @@ const app = express();
 
 let dbConnected = false;
 
-// Log every request
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
   next();
@@ -51,15 +51,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: dbConnected ? 'ok' : 'connecting' });
 });
 
+// Production static file serving
 if (process.env.NODE_ENV === 'production') {
   const cp = path.join(__dirname, '..', '..', 'client', 'dist');
+  const indexPath = path.join(cp, 'index.html');
   console.log('Static path:', cp);
+  console.log('index.html exists:', fs.existsSync(indexPath));
   app.use(express.static(cp));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return;
-    res.sendFile(path.join(cp, 'index.html'), (err) => {
-      if (err) res.status(500).send('Static files not found');
-    });
+  app.get('*', (_req, res) => {
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(200).send('<html><body><h1>ZETAtube</h1><p>App is running</p></body></html>');
+    }
   });
 }
 
