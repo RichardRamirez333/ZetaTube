@@ -12,7 +12,6 @@ import playlistRoutes from './routes/playlistRoutes';
 
 dotenv.config();
 
-// Global error handlers to prevent crashes
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
 });
@@ -24,21 +23,19 @@ const app = express();
 
 let dbConnected = false;
 
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 150,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many requests, try again later' },
+// Log every request
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
 });
 
-app.use(limiter);
+app.use(rateLimit({ windowMs: 60 * 1000, max: 150, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests' } }));
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 const requireDB = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!dbConnected) {
-    res.status(503).json({ message: 'Database not connected. Please wait for server to start.' });
+    res.status(503).json({ message: 'Database connecting...' });
     return;
   }
   next();
@@ -55,51 +52,39 @@ app.get('/api/health', (_req, res) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-  const clientDistPath = path.join(__dirname, '..', '..', 'client', 'dist');
-  console.log('Serving static files from:', clientDistPath);
-  app.use(express.static(clientDistPath));
-  
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
-      if (err) {
-        console.error('Error sending index.html:', err);
-        res.status(500).json({ message: 'Static files not found' });
-      }
+  const cp = path.join(__dirname, '..', '..', 'client', 'dist');
+  console.log('Static path:', cp);
+  app.use(express.static(cp));
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) return;
+    res.sendFile(path.join(cp, 'index.html'), (err) => {
+      if (err) res.status(500).send('Static files not found');
     });
   });
 }
 
 const PORT = process.env.PORT || 5000;
-
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', PORT);
+console.log('Starting on port', PORT);
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? '[set]' : '[not set]');
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  connectDB().catch((err) => console.error('connectDB error:', err));
+  console.log(`Listening on ${PORT}`);
+  connectDB();
 });
 
-async function connectDB(retries = 10, delay = 3000) {
+async function connectDB() {
   const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.error('MONGODB_URI not set — server running without database');
-    return;
-  }
-  for (let i = 0; i < retries; i++) {
+  if (!uri) { console.error('MONGODB_URI not set'); return; }
+  for (let i = 0; i < 10; i++) {
     try {
       await mongoose.connect(uri);
       dbConnected = true;
       console.log('MongoDB connected');
       return;
     } catch (err: any) {
-      console.error(`MongoDB attempt ${i + 1}/${retries}:`, err.message);
-      if (i < retries - 1) {
-        await new Promise((r) => setTimeout(r, delay));
-      } else {
-        console.error('All MongoDB attempts failed. Server running without DB.');
-      }
+      console.error(`DB attempt ${i + 1}/10:`, err.message);
+      if (i < 9) await new Promise((r) => setTimeout(r, 3000));
     }
   }
+  console.error('All DB attempts failed');
 }
