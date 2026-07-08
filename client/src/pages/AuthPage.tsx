@@ -22,7 +22,11 @@ export default function AuthPage() {
       }
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Something went wrong');
+      if (!err.response) {
+        setError('Cannot reach the server. Is the backend running on port 5000?');
+      } else {
+        setError(err.response?.data?.message || 'Something went wrong');
+      }
     }
   };
 
