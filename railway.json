@@ -1,10 +1,9 @@
 {
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "bash deploy.sh"
+    "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "cd server && npm start",
+    "startCommand": "npm start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
