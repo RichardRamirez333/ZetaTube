@@ -1,6 +1,7 @@
 {
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "buildCommand": "bash deploy.sh"
   },
   "deploy": {
     "startCommand": "cd server && npm start",
