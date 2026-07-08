@@ -12,9 +12,16 @@ import playlistRoutes from './routes/playlistRoutes';
 
 dotenv.config();
 
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
+
 const app = express();
 
-// Track DB connection status
 let dbConnected = false;
 
 const limiter = rateLimit({
@@ -29,7 +36,6 @@ app.use(limiter);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Middleware to block requests if DB is down
 const requireDB = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!dbConnected) {
     res.status(503).json({ message: 'Database not connected. Please wait for server to start.' });
@@ -48,48 +54,51 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: dbConnected ? 'ok' : 'connecting' });
 });
 
-// Serve static files from client build in production
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = path.join(__dirname, '..', '..', 'client', 'dist');
+  console.log('Serving static files from:', clientDistPath);
   app.use(express.static(clientDistPath));
   
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) {
-      return next();
-    }
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+      if (err) {
+        console.error('Error sending index.html:', err);
+        res.status(500).json({ message: 'Static files not found' });
+      }
+    });
   });
 }
 
 const PORT = process.env.PORT || 5000;
 
-console.log('Environment:', process.env.NODE_ENV);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', PORT);
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? '[set]' : '[not set]');
-console.log('B2_KEY_ID:', process.env.B2_KEY_ID ? '[set]' : '[not set]');
-console.log('B2_BUCKET_NAME:', process.env.B2_BUCKET_NAME || 'zetatube (default)');
 
-// Start server immediately, then connect to DB
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  connectDB();
+  connectDB().catch((err) => console.error('connectDB error:', err));
 });
 
-async function connectDB(retries = 5, delay = 5000) {
+async function connectDB(retries = 10, delay = 3000) {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.error('MONGODB_URI not set — server running without database');
+    return;
+  }
   for (let i = 0; i < retries; i++) {
     try {
-      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/youtube-clone');
+      await mongoose.connect(uri);
       dbConnected = true;
       console.log('MongoDB connected');
       return;
     } catch (err: any) {
-      console.error(`MongoDB connection attempt ${i + 1}/${retries} failed:`, err.message);
+      console.error(`MongoDB attempt ${i + 1}/${retries}:`, err.message);
       if (i < retries - 1) {
-        console.log(`Retrying in ${delay / 1000}s...`);
         await new Promise((r) => setTimeout(r, delay));
       } else {
-        console.error('All MongoDB connection attempts failed. Server running without DB.');
-        console.error('Set MONGODB_URI environment variable and restart.');
+        console.error('All MongoDB attempts failed. Server running without DB.');
       }
     }
   }
