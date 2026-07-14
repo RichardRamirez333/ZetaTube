@@ -2,6 +2,10 @@
   "name": "zetatube",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
     "build": "cd client && npm install --include=dev && npm run build && cd ../server && npm install --include=dev && npm run build && cd ..",
     "start": "cd server && npm start",
